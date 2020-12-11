@@ -150,8 +150,6 @@ static int __init synch_init(void)
 {
 	int rc;
 
-	pr_crit("Start initialization\n");
-
 	rc = init_list(5);
 	if (rc)
 		return rc;
