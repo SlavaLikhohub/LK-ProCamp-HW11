@@ -14,6 +14,8 @@
 #include <linux/interrupt.h>
 #include <linux/timer.h>
 #include <linux/gpio.h>
+#include <linux/types.h>
+
 #define MS_TO_NS(x) ((x) * NSEC_PER_MSEC)
 
 MODULE_AUTHOR("Viaheslav Lykhohub <viacheslav.lykhohub@globallogic.com>");
@@ -31,15 +33,15 @@ static struct time_node_t *node_arr = NULL;
 
 /* Jiffies timer */
 static struct timer_list jiff_timer;
-static __u64 delay_ms = 1000L;
+static u64 delay_ms = 1000L;
 
 /* IRQ */
 int button_irq = -1;
 int button_irq_counter = 0;
 
-static int init_list(const __u32 len)
+static int init_list(u32 len)
 {
-	__u32 i;
+	typeof(len) i;
 
 	node_arr = kmalloc_array(len, sizeof(*node_arr), GFP_KERNEL);
 
