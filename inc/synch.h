@@ -13,7 +13,7 @@
 #include <linux/spinlock_types.h>
 
 struct time_head_t {
-	struct list_head node;
+	struct list_head head;
 	struct spinlock lock;
 	__u32 num;
 };

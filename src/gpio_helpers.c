@@ -1,4 +1,4 @@
-/*
+ /*
  * gpio_helpers.c
  *
  *  Created on: Dec 4, 2020
@@ -12,17 +12,19 @@ static int button_init(unsigned gpio)
 	int rc;
 
 	rc = gpio_request(gpio, "Onboard user button");
-	if (rc)
-		goto err_register;
-
+	if (rc) {
+		pr_debug("GPIO request failed\n");
+		return rc;
+	}
 	rc = gpio_direction_input(gpio);
-	if (rc)
+	if (rc) {
+		pr_debug("GPIO setup failed\n")
 		goto err_set_dir;
-
+	}
 	return 0;
+
 err_set_dir:
 	gpio_free(gpio);
-err_register:
 	return rc;
 }
 
@@ -33,8 +35,7 @@ static void button_deinit(unsigned gpio)
 
 static int led_init(unsigned gpio)
 {
-	int rc = gpio_direction_output(gpio, 0);
-	return rc;
+	return gpio_direction_output(gpio, 0);
 }
 
 /**
@@ -51,7 +52,7 @@ int init_gpios(unsigned button, unsigned led)
 	rc = button_init(button);
 	if (unlikely(rc)) {
 		pr_err("Cannot init GPIO%d as an input\n", button);
-		goto err_button_init;
+		return rc;
 	}
 	rc = led_init(led);
 	if (rc) {
@@ -60,11 +61,10 @@ int init_gpios(unsigned button, unsigned led)
 	}
 
 	gpio_set_value(led, 1);
-
 	return 0;
+
 err_led_init:
 	button_deinit(button);
-err_button_init:
 	return rc;
 }
 

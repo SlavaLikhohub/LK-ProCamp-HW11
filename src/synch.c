@@ -1,30 +1,31 @@
 // SPDX-License-Identifier: GPL-2.0
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
-
 #define DEBUG
 
-#include "synch.h"
-#include "gpio_helpers.h"
-
+#include <linux/gpio.h>
 #include <linux/init.h>
+#include <linux/interrupt.h>
 #include <linux/module.h>
 #include <linux/printk.h>
 #include <linux/slab.h>
-#include <linux/interrupt.h>
 #include <linux/timer.h>
-#include <linux/gpio.h>
 #include <linux/types.h>
 
-#define MS_TO_NS(x) ((x) * NSEC_PER_MSEC)
+#include "gpio_helpers.h"
+#include "synch.h"
 
 MODULE_AUTHOR("Viaheslav Lykhohub <viacheslav.lykhohub@globallogic.com>");
 MODULE_DESCRIPTION("Synchronization methods");
 MODULE_LICENSE("GPL");
 
+#define MS_TO_NS(x) ((x) * NSEC_PER_MSEC)
+
+#define LIST_LEN 5
+
 /* Time list */
 static struct time_head_t time_head = {
-	//.node = LIST_HEAD_INIT(time_head.node),
+	.head = LIST_HEAD_INIT(time_head.node),
 	.lock = __SPIN_LOCK_UNLOCKED(time_head.lock),
 	.num = 0,
 };
@@ -33,19 +34,19 @@ static struct time_node_t *node_arr = NULL;
 
 /* Jiffies timer */
 static struct timer_list jiff_timer;
-static u64 delay_ms = 1000L;
+static const u64 delay_ms = 1000L;
 
 /* IRQ */
-int button_irq = -1;
-int button_irq_counter = 0;
+static int button_irq = -1;
+static int button_irq_counter = 0;
 
 static int init_list(u32 len)
 {
 	typeof(len) i;
 
-	node_arr = kmalloc_array(len, sizeof(*node_arr), GFP_KERNEL);
+//	INIT_LIST_HEAD(&time_head.node);
 
-	INIT_LIST_HEAD(&time_head.node);
+	node_arr = kmalloc_array(len, sizeof(*node_arr), GFP_KERNEL);
 
 	if (unlikely(!node_arr)) {
 		pr_crit("Cannot allocate memory. Abort...\n");
@@ -72,17 +73,20 @@ irqreturn_t button_irq_handler(int irq, void *data)
 
 irqreturn_t button_thread_handler(int irq, void *data)
 {
-	struct time_node_t *node;
+	struct time_node_t *node_i;
 	_Bool found = 0;
 
 	pr_debug("Entered button_thread_handler\n");
 
 	spin_lock(&time_head.lock);
-	list_for_each_entry(node, &time_head.node, node) {
-		if (node->num != 0) {
-			pr_info("Index: %d, time: %lli", node->num, node->time);
-			node->num = 0;
-			node->time = 0;
+	list_for_each_entry(node_i, &time_head.node, node) {
+		if (node_i->num != 0) {
+			pr_info("Index: %d, time: %lli",
+				node_i->num,
+				node_i->time);
+
+			node_i->num = 0;
+			node_i->time = 0;
 			found = 1;
 			break;
 		}
@@ -150,23 +154,28 @@ static int __init synch_init(void)
 {
 	int rc;
 
-	rc = init_list(5);
-	if (rc)
+	rc = init_list(LIST_LEN);
+	if (rc) {
+		pr_debug("List init failed\n");
 		return rc;
+	}
 
 	rc = init_button_irq();
-	if (rc)
+	if (rc) {
+		pr_debug("Button IRQ init failed\n");
 		goto err_button_irq_init;
-
+	}
 	rc = init_gpios(BUTTON, LED);
-	if (rc)
+	if (rc) {
+		pr_debug("GPIOS init failed\n");
 		goto err_gpios_init;
-
+	}
 	timer_setup(&jiff_timer, timer_func, 0);
 	rc = mod_timer(&jiff_timer, jiffies + msecs_to_jiffies(delay_ms));
-	if (rc)
+	if (rc) {
+		pr_debug("Timer init failed\n");
 		goto err_timer_fire;
-
+	}
 	return 0;
 
 err_timer_fire:
@@ -184,8 +193,8 @@ static void __exit synch_exit(void)
 	deinit_gpios(BUTTON, LED);
 	deinit_button_irq();
 	kfree(node_arr);
+	pr_debug("Module has been freed\n");
 }
 
 module_init(synch_init);
 module_exit(synch_exit);
-
